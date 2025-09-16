@@ -18,6 +18,8 @@ import WorkoutList from "./components/WorkoutList";
 import WorkoutSchedule from "./components/WorkoutSchedule";
 import Chatbot from "./components/Chatbot";
 import AuthSuccessPage from "./pages/AuthSuccessPage";
+import { UserDetailsProvider } from "./contexts/UserDetailsContext";
+import BasicUserDetails from "./components/BasicUserDetails";
 
 // Create theme
 const theme = createTheme({
@@ -68,6 +70,7 @@ const AppContent: React.FC = () => {
                     element={<Navigate to="/dashboard" replace />}
                   />
                   <Route path="/dashboard" element={<DashboardPage />} />
+                  <Route path="/user" element={<BasicUserDetails />} />
                   <Route path="/workouts" element={<WorkoutList />} />
                   <Route path="/schedule" element={<WorkoutSchedule />} />
                   <Route path="/history" element={<HistoryPage />} />
@@ -95,9 +98,11 @@ function App() {
     <ThemeProvider theme={theme}>
       <CssBaseline />
       <AuthProvider>
-        <Router>
-          <AppContent />
-        </Router>
+        <UserDetailsProvider>
+          <Router>
+            <AppContent />
+          </Router>
+        </UserDetailsProvider>
       </AuthProvider>
     </ThemeProvider>
   );

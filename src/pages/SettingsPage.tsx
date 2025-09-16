@@ -1,20 +1,22 @@
-import React, { useState } from "react";
 import {
   Box,
   Typography,
+  Grid,
   Card,
   CardContent,
-  Grid,
-  Switch,
   FormControlLabel,
+  Switch,
   Button,
   Alert,
 } from "@mui/material";
-import { Settings as SettingsIcon, Save, Logout } from "@mui/icons-material";
+import { Save, Settings as SettingsIcon } from "@mui/icons-material";
 import { useAuth } from "../contexts/AuthContext";
+import AccountInfo from "../components/AccountInfo";
+import { useState } from "react";
 
 const SettingsPage: React.FC = () => {
   const { user, logout } = useAuth();
+
   const [settings, setSettings] = useState({
     notifications: true,
     darkMode: false,
@@ -53,42 +55,7 @@ const SettingsPage: React.FC = () => {
       </Typography>
 
       <Grid container spacing={3}>
-        {/* User Information */}
-        <Grid size={{ xs: 12, md: 6 }}>
-          <Card>
-            <CardContent>
-              <Typography variant="h6" gutterBottom>
-                Account Information
-              </Typography>
-              <Box sx={{ mb: 2 }}>
-                <Typography variant="body2" color="text.secondary">
-                  Name
-                </Typography>
-                <Typography variant="body1">
-                  {user?.name || "Guest User"}
-                </Typography>
-              </Box>
-              <Box sx={{ mb: 2 }}>
-                <Typography variant="body2" color="text.secondary">
-                  Email
-                </Typography>
-                <Typography variant="body1">
-                  {user?.email || "guest@example.com"}
-                </Typography>
-              </Box>
-              <Button
-                variant="outlined"
-                startIcon={<Logout />}
-                onClick={handleLogout}
-                color="error"
-              >
-                Sign Out
-              </Button>
-            </CardContent>
-          </Card>
-        </Grid>
-
-        {/* Preferences */}
+        <AccountInfo user={user} handleLogout={handleLogout} />
         <Grid size={{ xs: 12, md: 6 }}>
           <Card>
             <CardContent>

@@ -27,7 +27,6 @@ const AuthSuccessPage: React.FC = () => {
           window.location.href = preAuthUrl;
         }, 1000);
       } catch (error) {
-        alert("error + " + error);
         console.error("Auth success processing error:", error);
         setError(
           error instanceof Error ? error.message : "Authentication failed"

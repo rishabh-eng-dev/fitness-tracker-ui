@@ -13,8 +13,8 @@ class AuthService {
     private tokens: AuthTokens | null = null;
     private listeners: ((user: User | null) => void)[] = [];
 
-    constructor() {
-        this.loadUserFromStorage();
+    async init(): Promise<void> {
+        await this.loadUserFromStorage();
         this.setupTokenRefresh();
     }
 
@@ -26,9 +26,7 @@ class AuthService {
 
     handleDirectOAuthResponse(authResponse: AuthTokens): void {
         this.setTokens(authResponse);
-        this.fetchUserProfile().catch(() => {
-            this.extractUserFromToken();
-        });
+        this.extractUserFromToken();
     }
 
     // Set tokens and store in localStorage
@@ -45,6 +43,12 @@ class AuthService {
         if (!this.tokens?.refreshToken) {
             throw new Error('No refresh token available');
         }
+
+        if (!this.tokens?.accessToken) {
+            throw new Error('No access token available');
+        }
+
+        this.extractUserFromToken();
 
         try {
             const response = await fetch(`${API_BASE_URL}/api/v1/auth/refreshToken`, {
@@ -82,67 +86,31 @@ class AuthService {
         }, 5 * 60 * 1000);
     }
 
-    // Fetch user profile from backend using access token
-    async fetchUserProfile(): Promise<void> {
-        if (!this.tokens?.accessToken) {
-            throw new Error('No access token available');
-        }
-
-        try {
-            const response = await fetch(`${API_BASE_URL}/api/v1/user/profile`, {
-                headers: {
-                    'Authorization': `Bearer ${this.tokens.accessToken}`,
-                    'Content-Type': 'application/json',
-                },
-            });
-
-            if (!response.ok) {
-                if (response.status === 401) {
-                    alert('here 401')
-                    await this.refreshAccessToken();
-                    return this.fetchUserProfile(); // Retry with new token
-                }
-                throw new Error('Failed to fetch user profile');
-            }
-
-            const user: User = await response.json();
-            this.setUser(user);
-        } catch (error) {
-            console.error('Error fetching user profile:', error);
-            // If we can't get user profile, try to extract from token
-            this.extractUserFromToken();
-        }
-    }
 
     // Extract user info from JWT token (fallback if no profile endpoint)
     private extractUserFromToken(): void {
-        if (!this.tokens?.accessToken) return;
+        if (!this.tokens?.accessToken) throw new Error('No access token available');
 
         try {
             const payload = JSON.parse(atob(this.tokens.accessToken.split('.')[1]));
 
             const user: User = {
-                id: payload.userId || '',
-                email: payload.sub || '',
-                name: payload.sub,
-                picture: '',
-                provider: 'UNKNOWN',
+                id: payload.userId,
+                email: payload.sub,
+                name: payload.name,
+                picture: payload.picture,
+                provider: payload.provider,
             };
 
             this.setUser(user);
         } catch (error) {
-            console.error('Failed to extract user from token:', error);
+            throw new Error('Error while getting user.')
         }
     }
 
     // Set user and notify listeners
     private setUser(user: User | null): void {
         this.user = user;
-        if (user) {
-            localStorage.setItem('user', JSON.stringify(user));
-        } else {
-            localStorage.removeItem('user');
-        }
         this.notifyListeners();
     }
 
@@ -164,7 +132,7 @@ class AuthService {
     }
 
     // Load user and tokens from localStorage
-    private loadUserFromStorage(): void {
+    private async loadUserFromStorage(): Promise<void> {
         try {
             // Load tokens
             const storedTokens = localStorage.getItem('tokens');
@@ -172,26 +140,21 @@ class AuthService {
                 this.tokens = JSON.parse(storedTokens);
             }
 
-            // Load user
-            const storedUser = localStorage.getItem('user');
-            if (storedUser) {
-                this.user = JSON.parse(storedUser);
-                this.notifyListeners();
-            } else if (this.tokens?.accessToken) {
+            this.extractUserFromToken();
+
+            if (this.user != null && this.tokens?.refreshToken) {
                 // Also try to fetch fresh profile
-                this.fetchUserProfile().catch(() => {
-                    this.extractUserFromToken();
-                });
+                await this.refreshAccessToken();
+                this.extractUserFromToken()
             }
         } catch (error) {
-            console.error('Error loading from storage:', error);
+            //console.error('Error loading from storage:', error);
             this.clearStorage();
         }
     }
 
     // Clear all stored data
     private clearStorage(): void {
-        localStorage.removeItem('user');
         localStorage.removeItem('tokens');
         localStorage.removeItem('preAuthUrl');
     }
@@ -213,16 +176,6 @@ class AuthService {
 
     // Logout
     logout(): void {
-        // Call backend logout endpoint if available
-        // if (this.tokens?.accessToken) {
-        //     fetch(`${API_BASE_URL}/api/auth/logout`, {
-        //         method: 'POST',
-        //         headers: {
-        //             'Authorization': `Bearer ${this.tokens.accessToken}`,
-        //         },
-        //     }).catch(console.error);
-        // }
-
         this.setUser(null);
         this.tokens = null;
         this.clearStorage();
@@ -279,3 +232,7 @@ class AuthService {
 
 // Create singleton instance
 export const authService = new AuthService();
+
+authService.init().catch((error) => {
+    console.error('Error initializing AuthService:', error);
+});

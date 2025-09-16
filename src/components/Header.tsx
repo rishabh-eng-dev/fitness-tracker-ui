@@ -12,8 +12,17 @@ import {
 import { AccountCircle, Logout, Settings } from "@mui/icons-material";
 import { useAuth } from "../contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
+import { Menu as MenuIcon } from "@mui/icons-material";
 
-const Header: React.FC = () => {
+interface HeaderProps {
+  sidebarOpen: boolean;
+  handleSidebarToggle: () => void;
+}
+
+const Header: React.FC<HeaderProps> = ({
+  sidebarOpen,
+  handleSidebarToggle,
+}) => {
   const { user, logout } = useAuth();
   const [anchorEl, setAnchorEl] = React.useState<null | HTMLElement>(null);
   const navigate = useNavigate();
@@ -37,29 +46,33 @@ const Header: React.FC = () => {
   };
 
   return (
-    <AppBar position="static" sx={{ backgroundColor: "#1976d2" }}>
+    <AppBar position="sticky" sx={{ backgroundColor: "#1976d2" }}>
       <Toolbar>
-        <Typography
-          variant="h6"
-          component="div"
-          sx={{
-            flexGrow: 1,
-            marginLeft: "30px",
-            color: "inherit",
-            width: "auto",
-          }}
-        >
-          <div
-            style={{
-              display: "inline-block",
-              width: "auto",
+        <Box sx={{ display: "flex", alignItems: "center", flexGrow: 1 }}>
+          {!sidebarOpen && (
+            <IconButton
+              color="inherit"
+              aria-label="open drawer"
+              edge="start"
+              onClick={handleSidebarToggle}
+              sx={{ mr: 2 }}
+            >
+              <MenuIcon />
+            </IconButton>
+          )}
+
+          <Typography
+            variant="h6"
+            component="div"
+            sx={{
+              color: "inherit",
               cursor: "pointer",
             }}
             onClick={() => navigate("/dashboard")}
           >
             Workout Tracker
-          </div>
-        </Typography>
+          </Typography>
+        </Box>
 
         {user && (
           <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>

@@ -19,6 +19,7 @@ import {
   History,
   Chat,
   Settings,
+  Person,
 } from "@mui/icons-material";
 import { useNavigate, useLocation } from "react-router-dom";
 
@@ -32,6 +33,7 @@ const Sidebar: React.FC<SidebarProps> = ({ open, onClose }) => {
   const location = useLocation();
   const menuItems = [
     { text: "Dashboard", icon: <Dashboard />, path: "/dashboard" },
+    { text: "Basic Details", icon: <Person />, path: "/user" },
     { text: "Workouts", icon: <FitnessCenter />, path: "/workouts" },
     { text: "Schedule", icon: <Schedule />, path: "/schedule" },
     { text: "History", icon: <History />, path: "/history" },
