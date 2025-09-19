@@ -1,6 +1,5 @@
 import { User } from '../types/auth';
 
-// Backend API Configuration
 const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:8080';
 
 interface AuthTokens {
@@ -18,77 +17,41 @@ class AuthService {
         this.setupTokenRefresh();
     }
 
-    loginWithGoogleRedirect(): void {
-        // Store current location to redirect back after login
+    // --- LOGIN METHODS ---
+    loginWithGoogleRedirect(type: string): void {
         localStorage.setItem('preAuthUrl', window.location.pathname);
-        window.location.href = `${API_BASE_URL}/oauth2/authorization/google`;
+        window.location.href = `${API_BASE_URL}/oauth2/authorization/${type}`;
     }
 
-    handleDirectOAuthResponse(authResponse: AuthTokens): void {
-        this.setTokens(authResponse);
-        this.extractUserFromToken();
+    async loginEmailPassword(email: string, password: string): Promise<void> {
+        if (!email) throw new Error('Email is required');
+        if (!password) throw new Error('Password is required');
+
+        const response = await fetch(`${API_BASE_URL}/api/v1/auth/login`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email, password }),
+        });
+
+        if (!response.ok) throw new Error('Login failed');
+
+        const newTokens: AuthTokens = await response.json();
+        await this.setTokens(newTokens);
+        await this.extractUserFromToken(); // ✅ will notify listeners
     }
 
-    // Set tokens and store in localStorage
-    private setTokens(authData: AuthTokens): void {
-        this.tokens = {
-            accessToken: authData.accessToken,
-            refreshToken: authData.refreshToken,
-        };
+    async handleDirectOAuthResponse(authResponse: AuthTokens): Promise<void> {
+        await this.setTokens(authResponse);
+        await this.extractUserFromToken(); // ✅ will notify listeners
+    }
+
+    // --- TOKEN & USER METHODS ---
+    private async setTokens(authData: AuthTokens): Promise<void> {
+        this.tokens = authData;
         localStorage.setItem('tokens', JSON.stringify(this.tokens));
     }
 
-    // Refresh access token using refresh token
-    async refreshAccessToken(): Promise<void> {
-        if (!this.tokens?.refreshToken) {
-            throw new Error('No refresh token available');
-        }
-
-        if (!this.tokens?.accessToken) {
-            throw new Error('No access token available');
-        }
-
-        this.extractUserFromToken();
-
-        try {
-            const response = await fetch(`${API_BASE_URL}/api/v1/auth/refreshToken`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    email: this.user?.email,
-                    token: this.tokens.refreshToken
-                }),
-            });
-
-            if (!response.ok) {
-                throw new Error('Failed to refresh token');
-            }
-
-            const newTokens: AuthTokens = await response.json();
-            this.setTokens(newTokens);
-        } catch (error) {
-            alert('logout automatic' + error)
-            console.error('Token refresh error:', error);
-            this.logout(); // Force logout if refresh fails
-            throw error;
-        }
-    }
-
-    // Setup automatic token refresh
-    private setupTokenRefresh(): void {
-        // Check token expiry every 5 minutes
-        setInterval(() => {
-            if (this.tokens?.accessToken && this.isTokenExpiringSoon()) {
-                this.refreshAccessToken().catch(console.error);
-            }
-        }, 5 * 60 * 1000);
-    }
-
-
-    // Extract user info from JWT token (fallback if no profile endpoint)
-    private extractUserFromToken(): void {
+    private async extractUserFromToken(): Promise<void> {
         if (!this.tokens?.accessToken) throw new Error('No access token available');
 
         try {
@@ -104,135 +67,146 @@ class AuthService {
 
             this.setUser(user);
         } catch (error) {
-            throw new Error('Error while getting user.')
+            this.logout(); // if token invalid
+            throw new Error('Failed to extract user from token');
         }
     }
 
-    // Set user and notify listeners
     private setUser(user: User | null): void {
         this.user = user;
         this.notifyListeners();
     }
 
-    // Check if token is expiring soon (within 5 minutes)
+    private notifyListeners(): void {
+        this.listeners.forEach((listener) => listener(this.user));
+    }
+
+    async refreshAccessToken(): Promise<void> {
+        if (!this.tokens?.refreshToken) throw new Error('No refresh token available');
+
+        try {
+            const response = await fetch(`${API_BASE_URL}/api/v1/auth/refreshToken`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    email: this.user?.email,
+                    token: this.tokens.refreshToken,
+                }),
+            });
+
+            if (!response.ok) throw new Error('Failed to refresh token');
+
+            const newTokens: AuthTokens = await response.json();
+            await this.setTokens(newTokens);
+            await this.extractUserFromToken();
+        } catch {
+            this.logout(); // force logout on refresh failure
+        }
+    }
+
+    private setupTokenRefresh(): void {
+        setInterval(() => {
+            if (this.tokens?.accessToken && this.isTokenExpiringSoon()) {
+                this.refreshAccessToken().catch(console.error);
+            }
+        }, 5 * 60 * 1000);
+    }
+
     private isTokenExpiringSoon(): boolean {
         if (!this.tokens?.accessToken) return false;
 
         try {
-            // Decode JWT to check expiry
             const payload = JSON.parse(atob(this.tokens.accessToken.split('.')[1]));
             const expiryTime = payload.exp * 1000;
-            const currentTime = Date.now();
-            const fiveMinutes = 5 * 60 * 1000;
-
-            return (expiryTime - currentTime) < fiveMinutes;
+            return expiryTime - Date.now() < 5 * 60 * 1000;
         } catch {
-            return true; // Assume expiring if can't decode
+            return true; // assume expiring if decoding fails
         }
     }
 
-    // Load user and tokens from localStorage
     private async loadUserFromStorage(): Promise<void> {
         try {
-            // Load tokens
             const storedTokens = localStorage.getItem('tokens');
             if (storedTokens) {
                 this.tokens = JSON.parse(storedTokens);
-            }
+                await this.extractUserFromToken();
 
-            this.extractUserFromToken();
-
-            if (this.user != null && this.tokens?.refreshToken) {
-                // Also try to fetch fresh profile
-                await this.refreshAccessToken();
-                this.extractUserFromToken()
+                if (this.tokens?.refreshToken && this.isTokenExpiringSoon()) {
+                    await this.refreshAccessToken();
+                }
             }
-        } catch (error) {
-            //console.error('Error loading from storage:', error);
+        } catch {
             this.clearStorage();
+            this.user = null;
+            this.notifyListeners();
         }
     }
 
-    // Clear all stored data
     private clearStorage(): void {
         localStorage.removeItem('tokens');
         localStorage.removeItem('preAuthUrl');
     }
 
-    // Get current user
-    getUser(): User | null {
-        return this.user;
-    }
-
-    // Get access token for API calls
-    getAccessToken(): string | null {
-        return this.tokens?.accessToken || null;
-    }
-
-    // Check if user is authenticated
-    isAuthenticated(): boolean {
-        return this.user !== null && this.tokens?.accessToken !== null;
-    }
-
-    // Logout
+    // --- LOGOUT ---
     logout(): void {
-        this.setUser(null);
+        this.setUser(null); // ✅ notifies listeners
         this.tokens = null;
         this.clearStorage();
     }
 
-    // Make authenticated API request
+    // --- UTILITY METHODS ---
+    getUser(): User | null {
+        return this.user;
+    }
+
+    getAccessToken(): string | null {
+        return this.tokens?.accessToken || null;
+    }
+
+    isAuthenticated(): boolean {
+        return this.user !== null && !!this.tokens?.accessToken;
+    }
+
     async makeAuthenticatedRequest(url: string, options: RequestInit = {}): Promise<Response> {
-        if (!this.tokens?.accessToken) {
-            throw new Error('No access token available');
-        }
+        if (!this.tokens?.accessToken) throw new Error('No access token available');
 
         const authOptions = {
             ...options,
             headers: {
                 ...options.headers,
-                'Authorization': `Bearer ${this.tokens.accessToken}`,
+                Authorization: `Bearer ${this.tokens.accessToken}`,
                 'Content-Type': 'application/json',
             },
         };
 
         let response = await fetch(`${API_BASE_URL}${url}`, authOptions);
 
-        // If unauthorized, try to refresh token and retry
         if (response.status === 401) {
             try {
                 await this.refreshAccessToken();
                 authOptions.headers = {
                     ...authOptions.headers,
-                    'Authorization': `Bearer ${this.tokens.accessToken}`,
+                    Authorization: `Bearer ${this.tokens.accessToken}`,
                 };
                 response = await fetch(`${API_BASE_URL}${url}`, authOptions);
-            } catch (error) {
+            } catch {
                 this.logout();
-                throw error;
+                throw new Error('Unauthorized');
             }
         }
 
         return response;
     }
 
-    // Subscribe to auth state changes
     subscribe(listener: (user: User | null) => void): () => void {
         this.listeners.push(listener);
         return () => {
-            this.listeners = this.listeners.filter(l => l !== listener);
+            this.listeners = this.listeners.filter((l) => l !== listener);
         };
-    }
-
-    // Notify all listeners
-    private notifyListeners(): void {
-        this.listeners.forEach(listener => listener(this.user));
     }
 }
 
-// Create singleton instance
+// Singleton instance
 export const authService = new AuthService();
 
-authService.init().catch((error) => {
-    console.error('Error initializing AuthService:', error);
-});
+authService.init().catch((error) => console.error('AuthService init error:', error));

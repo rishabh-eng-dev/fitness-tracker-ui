@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
 import { AuthContextType, AuthState, User } from "../types/auth";
 import { authService } from "../services/authService";
+import { useNavigate } from "react-router-dom";
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
@@ -23,6 +24,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     isLoading: true,
     error: null,
   });
+  const navigate = useNavigate();
 
   useEffect(() => {
     // Initialize auth state
@@ -49,7 +51,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   }, []);
 
   // Login - now redirects to backend (synchronous)
-  const login = async (): Promise<void> => {
+  const loginOAuth = async (type: string): Promise<void> => {
     try {
       setAuthState((prevState) => ({
         ...prevState,
@@ -58,7 +60,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       }));
 
       // This will redirect to backend OAuth endpoint
-      authService.loginWithGoogleRedirect();
+      authService.loginWithGoogleRedirect(type);
       // Note: This function will redirect, so code after this won't execute
     } catch (error) {
       setAuthState((prevState) => ({
@@ -72,7 +74,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const logout = (): void => {
     authService.logout();
     // Redirect to login page after logout
-    window.location.href = "/login";
+    navigate("/login");
   };
 
   const clearError = (): void => {
@@ -92,9 +94,18 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     return authService.getAccessToken();
   };
 
+  const loginEmailPassword = async (
+    email: string,
+    password: string
+  ): Promise<void> => {
+    await authService.loginEmailPassword(email, password);
+    navigate("/dashboard");
+  };
+
   const value: AuthContextType = {
     ...authState,
-    login,
+    loginOAuth,
+    loginEmailPassword,
     logout,
     clearError,
     makeAuthenticatedRequest,

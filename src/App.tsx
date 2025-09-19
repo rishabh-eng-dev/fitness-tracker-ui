@@ -97,13 +97,13 @@ function App() {
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />
-      <AuthProvider>
-        <UserDetailsProvider>
-          <Router>
+      <Router>
+        <AuthProvider>
+          <UserDetailsProvider>
             <AppContent />
-          </Router>
-        </UserDetailsProvider>
-      </AuthProvider>
+          </UserDetailsProvider>
+        </AuthProvider>
+      </Router>
     </ThemeProvider>
   );
 }

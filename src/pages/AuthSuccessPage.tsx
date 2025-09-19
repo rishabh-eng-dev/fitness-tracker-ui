@@ -4,7 +4,6 @@ import { authService } from "../services/authService";
 
 const AuthSuccessPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
-  const [, setIsProcessing] = useState(true);
 
   useEffect(() => {
     const processAuthSuccess = async () => {
@@ -31,7 +30,6 @@ const AuthSuccessPage: React.FC = () => {
         setError(
           error instanceof Error ? error.message : "Authentication failed"
         );
-        setIsProcessing(false);
 
         // Redirect to login after error
         setTimeout(() => {

@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import {
   Box,
   Container,
@@ -7,25 +7,74 @@ import {
   Button,
   CircularProgress,
   Alert,
+  TextField,
+  Divider,
 } from "@mui/material";
 import { Google } from "@mui/icons-material";
 import { useAuth } from "../contexts/AuthContext";
 
 const LoginPage: React.FC = () => {
-  const { login, isLoading, error, clearError } = useAuth();
+  const { loginOAuth, loginEmailPassword, isLoading, error, clearError } =
+    useAuth();
 
-  const handleLogin = async () => {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+
+  const [emailError, setEmailError] = useState("");
+  const [passwordError, setPasswordError] = useState("");
+
+  const validate = () => {
+    let valid = true;
+
+    // email validation
+    if (!email.trim()) {
+      setEmailError("Email is required");
+      valid = false;
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      setEmailError("Please enter a valid email address");
+      valid = false;
+    } else {
+      setEmailError("");
+    }
+
+    // password validation
+    if (!password.trim()) {
+      setPasswordError("Password is required");
+      valid = false;
+    } else {
+      const passwordRegex =
+        /^(?=.*[a-z])(?=.*[A-Z])(?=.*[!@#$%^&*()_+{}[\]:;<>,.?~\\/-]).{8,}$/;
+      if (!passwordRegex.test(password)) {
+        setPasswordError(
+          "Password must be at least 8 characters long, contain uppercase, lowercase, and a special symbol"
+        );
+        valid = false;
+      } else {
+        setPasswordError("");
+      }
+    }
+
+    return valid;
+  };
+
+  const handleOAuthLogin = async (type: string) => {
     try {
-      await login();
+      await loginOAuth(type);
     } catch (error) {
-      console.error("Login failed:", error);
+      console.error("OAuth login failed:", error);
     }
   };
 
-  // const handleSkipLogin = () => {
-  //   // For testing purposes, trigger a dummy login
-  //   window.location.reload();
-  // };
+  const handleEmailLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!validate()) return;
+
+    try {
+      await loginEmailPassword(email, password);
+    } catch (error) {
+      console.error("Email login failed:", error);
+    }
+  };
 
   return (
     <Container component="main" maxWidth="sm">
@@ -72,10 +121,52 @@ const LoginPage: React.FC = () => {
             </Alert>
           )}
 
+          {/* Email + Password Login */}
+          <Box
+            component="form"
+            onSubmit={handleEmailLogin}
+            sx={{ width: "100%", mb: 3 }}
+            noValidate // <-- disables browser default validation
+          >
+            <TextField
+              label="Email"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              fullWidth
+              margin="normal"
+              error={!!emailError}
+              helperText={emailError}
+            />
+            <TextField
+              label="Password"
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              fullWidth
+              margin="normal"
+              error={!!passwordError}
+              helperText={passwordError}
+            />
+            <Button
+              type="submit"
+              variant="contained"
+              color="primary"
+              disabled={isLoading}
+              fullWidth
+              sx={{ mt: 2, py: 1.5, fontSize: "1.1rem" }}
+            >
+              {isLoading ? "Signing in..." : "Sign in with Email"}
+            </Button>
+          </Box>
+
+          <Divider sx={{ width: "100%", my: 2 }}>OR</Divider>
+
+          {/* Google Login */}
           <Button
             variant="contained"
             startIcon={isLoading ? <CircularProgress size={20} /> : <Google />}
-            onClick={handleLogin}
+            onClick={() => handleOAuthLogin("google")}
             disabled={isLoading}
             size="large"
             sx={{
